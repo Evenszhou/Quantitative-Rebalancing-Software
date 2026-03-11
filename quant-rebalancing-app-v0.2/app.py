@@ -217,7 +217,7 @@ elif page == "2. 配权计算":
 elif page == "3. 交易成本设置":
     st.header("💰 交易成本设置 🆕")
     
-    if not st.session_state.weights:
+    if st.session_state.weights is None:
         st.warning("⚠️ 请先进行配权计算")
     else:
         st.markdown("""
