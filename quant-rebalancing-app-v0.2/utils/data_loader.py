@@ -54,13 +54,16 @@ class DataLoader:
         """标准化列名"""
         column_mapping = {}
         
-        for standard_name, variants in self.price_columns.items():
-            for col in df.columns:
-                if col in variants or any(v in col for v in variants):
-                    column_mapping[col] = standard_name
-                    break
+        for standard_name, variants in self.price_columns.items(): #  遍历预定义的价格标准列名及其所有变体 standard_name: 标准列名 variants: 该标准列名的所有可能变体
+            for col in df.columns: #  遍历读取的数据框中的所有列名
+                if col in variants or any(v in col for v in variants): 
+                    #  检查当前列名是否在变体列表中，或者是否包含任何变体字典里记载的字符串         
+                    column_mapping[col] = standard_name #  如果匹配成功，将标准列名映射到当前列名
+                    break #  找到匹配后立即跳出内层循环，继续处理下一个标准列名
+
+        #这里只是通过一个loop实现了从不标准列名到标准列名的字典映射        
         
-        # 重命名列
+        # 重命名列，这里才是使用字典映射来更改实际列名的地方
         df = df.rename(columns=column_mapping)
         
         return df
@@ -70,7 +73,7 @@ class DataLoader:
         # 查找日期列
         date_col = None
         for col in df.columns:
-            if col in self.date_columns or any(d in col for d in self.date_columns):
+            if col in self.date_columns or any(d in col for d in self.date_columns): #和处理标准列的逻辑如出一辙
                 date_col = col
                 break
         
