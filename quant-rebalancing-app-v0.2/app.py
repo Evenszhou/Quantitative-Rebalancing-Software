@@ -34,9 +34,10 @@ st.title("📊 量化配权软件 v0.2")
 st.markdown("**新增功能**：最优夏普配权 | 灵活交易成本 | 详细验算报告")
 st.markdown("---")
 
-# 初始化session state
+# 初始化session state - 用于在不同页面间保持数据状态，作用就像 “持久化的变量”
 if 'assets_data' not in st.session_state:
-    st.session_state.assets_data = {}
+    st.session_state.assets_data = {} #  初始化资产数据字典
+    # .asserts_data是一个自定义的变量名，这里下来的一堆东西也是这样
 if 'assets_prices' not in st.session_state:
     st.session_state.assets_prices = {}
 if 'weights' not in st.session_state:
@@ -45,10 +46,11 @@ if 'backtest_results' not in st.session_state:
     st.session_state.backtest_results = None
 if 'transaction_costs' not in st.session_state:
     st.session_state.transaction_costs = {}
+#这些初始化代码的作用只有两个：1.防止变量未定义报错 2.让数据在页面交互时不丢失、不被重置
 
 # 侧边栏 - 导航
 st.sidebar.title("功能导航")
-page = st.sidebar.radio(
+page = st.sidebar.radio( #  单选按钮组，用于选择功能页面
     "选择功能",
     ["1. 数据管理", "2. 配权计算", "3. 交易成本设置", "4. 回测分析", "5. 结果导出"]
 )
@@ -58,30 +60,32 @@ if page == "1. 数据管理":
     st.header("📁 数据管理")
     
     # 文件上传
-    st.subheader("上传资产数据")
-    uploaded_files = st.file_uploader(
-        "上传多个资产文件（Excel或CSV）",
-        type=['xlsx', 'csv'],
-        accept_multiple_files=True,
-        help="每个文件代表一个资产，文件名将被用作资产名称"
+    st.subheader("上传资产数据") #  设置页面标题
+    uploaded_files = st.file_uploader( #  创建文件上传组件，允许用户上传多个Excel或CSV文件
+        "上传多个资产文件（Excel或CSV）", #  上传组件的提示文本
+        type=['xlsx', 'csv'], #  接受的文件类型
+        accept_multiple_files=True, #  允许多文件上传
+        help="每个文件代表一个资产，文件名将被用作资产名称" #  帮助文本
     )
     
-    if uploaded_files:
+    if uploaded_files: #  检查是否有上传的文件，如果有就为true？
         data_loader = DataLoader()
         
         for file in uploaded_files:
             try:
                 # 读取文件
                 file_name = Path(file.name).stem
-                df = data_loader.load_file(file)
+                df = data_loader.load_file(file) #  使用数据加载器加载文件内容，主要是做列名和时间列标准化的工作
                 
                 # 存储到session state
-                st.session_state.assets_data[file_name] = df
-                
+                st.session_state.assets_data[file_name] = df #  将处理后的数据存储到session_state的assets_data字典中，键为文件名
+                # 那这里头装的是df
+
                 # 如果有价格数据，也存储
                 if '收盘价' in df.columns or 'close' in df.columns:
                     st.session_state.assets_prices[file_name] = df
-                
+                # 你装的也是df
+
                 st.success(f"✅ 已加载: {file_name}")
             except Exception as e:
                 st.error(f"❌ 加载失败 {file.name}: {str(e)}")
@@ -109,6 +113,7 @@ if page == "1. 数据管理":
             with col3:
                 if '日期' in df.columns or df.index.name == '日期':
                     st.metric("时间跨度", f"{len(df)} 天")
+                    # 这个逻辑处理得不咋地啊
             
             # 数据表格
             st.dataframe(df.head(10), use_container_width=True)

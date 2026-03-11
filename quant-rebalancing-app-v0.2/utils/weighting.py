@@ -74,7 +74,7 @@ class WeightingEngine:
             rc = rc / rc.sum()
             
             # 目标：风险贡献与目标风险预算的差异
-            return np.sum((rc - target_risk) ** 2)
+            return np.sum((rc - target_risk) ** 2) #使得单一RC占总RC的比例等权，或者最小化
         
         # 约束条件
         constraints = [
