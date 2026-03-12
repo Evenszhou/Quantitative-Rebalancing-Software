@@ -1,7 +1,12 @@
 """
-量化配权软件 v0.2 - Streamlit版本
+量化配权软件 v0.3 - Streamlit版本
 主程序入口
 新增功能：
+- 滚动配权（支持固定窗口和累积窗口）
+- 修复未来函数问题
+- 修复基准资产影响组合构成的问题
+
+历史功能：
 - 最优夏普配权方法
 - 灵活的交易成本设置
 - 3个sheet的Excel导出（仓位、绩效、验算）
@@ -23,15 +28,15 @@ from utils.backtest import BacktestEngine, TransactionCost
 
 # 页面配置
 st.set_page_config(
-    page_title="量化配权软件 v0.2",
+    page_title="量化配权软件 v0.3",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # 标题
-st.title("📊 量化配权软件 v0.2")
-st.markdown("**新增功能**：最优夏普配权 | 灵活交易成本 | 详细验算报告")
+st.title("📊 量化配权软件 v0.3")
+st.markdown("**v0.3 新增功能**：滚动配权 | 修复未来函数 | 修复基准资产问题 | 最优夏普配权 | 灵活交易成本 | 详细验算报告")
 st.markdown("---")
 
 # 初始化session state - 用于在不同页面间保持数据状态，作用就像 “持久化的变量”
@@ -154,6 +159,22 @@ elif page == "2. 配权计算":
             with col2:
                 allow_short = st.checkbox("允许做空", value=False)
         
+        # 数据设置
+        st.subheader("数据设置")
+        col1, col2 = st.columns(2)
+        with col1:
+            warmup_period = st.number_input(
+                "预热期（天数）",
+                min_value=30,
+                max_value=2000,
+                value=252,
+                step=10,
+                help="用于计算权重的历史数据天数，避免使用全量数据导致未来函数"
+            )
+        with col2:
+            total_days = len(next(iter(st.session_state.assets_data.values())))
+            st.metric("可用数据天数", total_days)
+        
         # 选择资产
         st.subheader("选择参与配权的资产")
         selected_assets = st.multiselect(
@@ -170,8 +191,16 @@ elif page == "2. 配权计算":
                     {k: st.session_state.assets_data[k] for k in selected_assets}
                 )
                 
+                # ✅ 修复：只使用预热期数据计算权重，避免未来函数
+                if len(returns_df) > warmup_period:
+                    warmup_returns = returns_df.iloc[:int(warmup_period)]
+                    st.info(f"使用前 {warmup_period} 天的数据计算权重（避免未来函数）")
+                else:
+                    warmup_returns = returns_df
+                    st.warning(f"数据不足 {warmup_period} 天，使用全部 {len(returns_df)} 天数据")
+                
                 # 配权计算
-                engine = WeightingEngine(returns_df)
+                engine = WeightingEngine(warmup_returns)
                 
                 if "等权" in method:
                     weights = engine.equal_weight()
@@ -370,7 +399,19 @@ elif page == "4. 回测分析":
         )
         
         # 回测设置
-        col1, col2 = st.columns(2)
+        st.subheader("回测参数设置")
+        
+        # 配权方法选择（新增）
+        method = st.selectbox(
+            "配权方法",
+            ["等权配权 (Equal Weight)", 
+             "风险平价 (Risk Parity)", 
+             "最小方差 (Minimum Variance)",
+             "最优夏普 (Maximum Sharpe)"],
+            help="回测时使用的配权算法"
+        )
+        
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             rebalance_freq = st.selectbox(
                 "再平衡频率",
@@ -383,6 +424,61 @@ elif page == "4. 回测分析":
                 value=100000,
                 step=10000
             )
+        with col3:
+            # ✅ 修复：在回测页面也添加预热期设置
+            warmup_period = st.number_input(
+                "预热期（天）",
+                min_value=30,
+                max_value=2000,
+                value=252,
+                step=10,
+                help="用于计算初始权重的历史数据天数"
+            )
+        with col4:
+            use_rolling_weights = st.checkbox(
+                "滚动配权",
+                value=False,
+                help="启用后，每次调仓时会基于历史数据重新计算权重"
+            )
+        
+        # 滚动配权窗口设置
+        if use_rolling_weights:
+            st.subheader("滚动窗口设置")
+            col_win1, col_win2 = st.columns(2)
+            
+            with col_win1:
+                window_type = st.radio(
+                    "窗口类型",
+                    options=["累积窗口", "固定窗口"],
+                    index=0,
+                    help="累积窗口：使用全部历史数据；固定窗口：只用最近N天数据"
+                )
+                use_fixed_window = (window_type == "固定窗口")
+            
+            with col_win2:
+                if use_fixed_window:
+                    window_option = st.selectbox(
+                        "窗口大小",
+                        options=["30天", "60天", "120天", "自定义"],
+                        index=1
+                    )
+                    
+                    if window_option == "自定义":
+                        rolling_window = st.number_input(
+                            "自定义窗口天数",
+                            min_value=10,
+                            max_value=1000,
+                            value=60,
+                            step=10
+                        )
+                    else:
+                        rolling_window = int(window_option.replace("天", ""))
+                else:
+                    rolling_window = warmup_period  # 累积窗口时不使用
+                    st.info("使用全部历史数据（累积窗口）")
+        else:
+            use_fixed_window = False
+            rolling_window = warmup_period
         
         # 交易成本设置提醒
         if not st.session_state.transaction_costs:
@@ -399,14 +495,6 @@ elif page == "4. 回测分析":
                 if st.session_state.assets_prices:
                     prices_df = data_loader.prepare_returns(st.session_state.assets_prices)
                 
-                # 回测
-                engine = BacktestEngine(
-                    returns_df,
-                    st.session_state.weights,
-                    baseline_asset,
-                    prices_df
-                )
-                
                 # 转换transaction_costs格式
                 transaction_costs = {}
                 for asset in st.session_state.weights.index:
@@ -416,10 +504,26 @@ elif page == "4. 回测分析":
                         # 使用默认成本
                         transaction_costs[asset] = TransactionCost()
                 
+                # ✅ 修复：BacktestEngine 参数顺序修正（v0.3 接口变更）
+                engine = BacktestEngine(
+                    returns_df=returns_df,
+                    baseline_asset=baseline_asset,
+                    prices_df=prices_df
+                )
+                
+                # 运行回测
+                # ✅ 修复：传递 static_weights，使用用户在配权计算页面计算的权重
+                # 这样基准资产的选择不会影响组合构成
                 results = engine.run_backtest(
                     initial_value=initial_value,
                     rebalance_freq=rebalance_freq,
-                    transaction_costs=transaction_costs
+                    transaction_costs=transaction_costs,
+                    use_rolling_weights=use_rolling_weights,
+                    weighting_method=method.split('(')[0].strip(),
+                    warmup_period=warmup_period,
+                    use_fixed_window=use_fixed_window,
+                    rolling_window=rolling_window,
+                    static_weights=st.session_state.weights  # 使用配权计算的权重
                 )
                 
                 st.session_state.backtest_results = results
@@ -625,7 +729,7 @@ elif page == "5. 结果导出":
         st.download_button(
             label="📥 下载完整Excel报告（3个Sheet）",
             data=buffer.getvalue(),
-            file_name=f"portfolio_report_v0.2_{timestamp}.xlsx",
+            file_name=f"portfolio_report_v0.3_{timestamp}.xlsx",
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             type="primary"
         )
@@ -658,5 +762,5 @@ elif page == "5. 结果导出":
 
 # 页脚
 st.markdown("---")
-st.markdown("💡 **v0.2 新功能**：最优夏普配权 | 灵活交易成本 | 3个Sheet验算报告")
+st.markdown("💡 **v0.3 新功能**：滚动配权 | 修复未来函数 | 修复基准资产问题")
 st.markdown("遇到问题请联系开发者")

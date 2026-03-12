@@ -46,7 +46,9 @@ class BacktestEngine:
         warmup_period: int = 252,
         risk_free_rate: float = 0.03,
         allow_short: bool = False,
-        static_weights: Optional[pd.Series] = None
+        static_weights: Optional[pd.Series] = None,
+        use_fixed_window: bool = False,
+        rolling_window: int = 252
     ) -> Dict:
         """
         运行回测（支持滚动配权）
@@ -61,15 +63,20 @@ class BacktestEngine:
             risk_free_rate: 无风险利率
             allow_short: 是否允许做空
             static_weights: 静态权重（不滚动时使用）
+            use_fixed_window: 是否使用固定窗口（否则用累积窗口）
+            rolling_window: 固定窗口大小（天数）
         """
         from .weighting import WeightingEngine
         
         self.trade_log = []
         
         # 确定资产列表
+        # ✅ 修复：基准资产不应该被排除在组合外，只用于对比
         if static_weights is not None:
             assets = static_weights.index.tolist()
         else:
+            # 使用所有收益率列（除了基准资产）作为组合资产
+            # 注意：如果基准资产也在组合中，需要用户手动从配权中排除
             assets = [col for col in self.returns_df.columns if col != self.baseline_asset]
         
         if not assets:
@@ -121,7 +128,9 @@ class BacktestEngine:
                 rebalance_freq,
                 transaction_costs,
                 risk_free_rate,
-                allow_short
+                allow_short,
+                use_fixed_window,
+                rolling_window
             )
         
         # 计算结果
@@ -233,9 +242,11 @@ class BacktestEngine:
         rebalance_freq: str,
         transaction_costs: Dict[str, TransactionCost],
         risk_free_rate: float,
-        allow_short: bool
+        allow_short: bool,
+        use_fixed_window: bool = False,
+        rolling_window: int = 252
     ) -> Tuple[pd.Series, pd.DataFrame]:
-        """滚动配权回测（无未来函数）"""
+        """滚动配权回测（支持固定窗口和累积窗口）"""
         
         from .weighting import WeightingEngine
         
@@ -280,8 +291,14 @@ class BacktestEngine:
             
             # 检查是否需要再平衡
             if date in rebalance_dates:
-                # 关键：只用截至当天的历史数据重新计算权重
-                historical_returns = returns.iloc[:i+1]  # 包含当天
+                # ✅ 修改：支持固定窗口和累积窗口
+                if use_fixed_window and i >= rolling_window:
+                    # 固定窗口：只用最近 rolling_window 天的数据
+                    historical_returns = returns.iloc[i-rolling_window+1:i+1]
+                else:
+                    # 累积窗口：使用截至当天的全部历史数据
+                    historical_returns = returns.iloc[:i+1]
+                
                 engine = WeightingEngine(historical_returns)
                 
                 if weighting_method == '风险平价':
