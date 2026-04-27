@@ -1,0 +1,207 @@
+/* ============================================================================
+ * Quant Portfolio Rebalancing App - Global Styles
+ * ============================================================================ */
+
+/* ---------- Reset & Base ---------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ---------- App Layout ---------- */
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background: linear-gradient(135deg, #001529 0%, #003a70 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---------- Sidebar ---------- */
+.app-sider {
+  background: #fff !important;
+  border-right: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.sider-steps {
+  padding: 8px 16px;
+}
+
+.sider-steps .ant-steps-item-title {
+  font-size: 13px !important;
+}
+
+.sider-steps .ant-steps-item-description {
+  font-size: 11px !important;
+}
+
+.sider-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+}
+
+/* ---------- Content Area ---------- */
+.app-content {
+  background: #f5f5f5;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.step-header {
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.step-header h5 {
+  margin-bottom: 4px;
+}
+
+.step-content {
+  margin-bottom: 24px;
+  min-height: 400px;
+}
+
+.step-footer {
+  padding-top: 16px;
+  border-top: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ---------- File Upload ---------- */
+.file-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.upload-card {
+  border-radius: 8px;
+}
+
+.upload-dragger {
+  border-radius: 8px;
+  padding: 24px !important;
+}
+
+.files-card {
+  border-radius: 8px;
+}
+
+.files-table {
+  margin-top: 8px;
+}
+
+/* ---------- Config Panel ---------- */
+.config-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config-card {
+  border-radius: 8px;
+}
+
+/* ---------- Result Display ---------- */
+.result-display {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.result-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.result-tabs {
+  margin-bottom: 0;
+}
+
+.result-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0 12px;
+  }
+
+  .content-wrapper {
+    padding: 12px;
+  }
+
+  .header-content .ant-typography {
+    font-size: 14px;
+  }
+
+  .sider-steps .ant-steps-item-title {
+    font-size: 12px !important;
+  }
+
+  .sider-steps .ant-steps-item-description {
+    display: none !important;
+  }
+}
+
+/* ---------- Scrollbar ---------- */
+.app-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-content::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+.app-content::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* ---------- Utility ---------- */
+.mb-8 {
+  margin-bottom: 8px;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
