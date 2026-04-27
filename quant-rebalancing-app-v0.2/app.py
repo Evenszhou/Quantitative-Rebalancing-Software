@@ -113,7 +113,7 @@ if page == "1. 数据管理":
             with col3:
                 if '日期' in df.columns or df.index.name == '日期':
                     st.metric("时间跨度", f"{len(df)} 天")
-                    # 这个逻辑处理得不咋地啊
+                    # 这个逻辑处理得不咋地啊，其实行数本身就包含了时间跨度
             
             # 数据表格
             st.dataframe(df.head(10), use_container_width=True)

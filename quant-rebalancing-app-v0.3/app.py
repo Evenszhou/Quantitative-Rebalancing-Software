@@ -57,7 +57,7 @@ if 'transaction_costs' not in st.session_state:
 st.sidebar.title("功能导航")
 page = st.sidebar.radio( #  单选按钮组，用于选择功能页面
     "选择功能",
-    ["1. 数据管理", "2. 配权计算", "3. 交易成本设置", "4. 回测分析", "5. 结果导出"]
+    ["1. 数据管理", "2. 配权计算", "3. 交易成本设置", "4. 回测分析", "5. 结果导出", "6. 投研观点管理 (Black-Litterman) 🆕"]
 )
 
 # 页面1: 数据管理
@@ -759,6 +759,515 @@ elif page == "5. 结果导出":
                     file_name="position_series.csv",
                     mime='text/csv'
                 )
+
+# 页面6: 投研观点管理 (Black-Litterman)
+elif page == "6. 投研观点管理 (Black-Litterman) 🆕":
+    st.header("💡 投研观点管理 (Black-Litterman模型)")
+    st.markdown("""
+        **功能说明**：融合投研观点与市场均衡，生成最优投资组合权重。
+
+        **使用流程**：
+        1. 上传资产数据（在"数据管理"页面）
+        2. 添加投研观点（看好/看空某个资产）
+        3. 设置BL模型参数
+        4. 计算权重并对比分析
+    """)
+    st.markdown("---")
+
+    # 检查是否有数据
+    if not st.session_state.assets_data:
+        st.warning("⚠️ 请先在'1. 数据管理'页面上传资产数据")
+    else:
+        # 初始化BL相关的session state
+        if 'bl_views' not in st.session_state:
+            st.session_state.bl_views = []
+        if 'bl_weights' not in st.session_state:
+            st.session_state.bl_weights = None
+
+        # ========== 左右分栏布局 ==========
+        col_left, col_right = st.columns([1, 1])
+
+        with col_left:
+            st.subheader("📝 添加投研观点")
+
+            # 观点类型选择
+            view_type = st.radio(
+                "观点类型",
+                ["绝对观点", "相对观点"],
+                help="绝对观点：某资产的预期收益\n相对观点：两个资产的相对表现"
+            )
+
+            if view_type == "绝对观点":
+                # 绝对观点输入
+                asset = st.selectbox(
+                    "选择资产",
+                    list(st.session_state.assets_data.keys()),
+                    help="选择要发表观点的资产"
+                )
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    view_return = st.number_input(
+                        "预期超额收益（%）",
+                        min_value=-20.0,
+                        max_value=20.0,
+                        value=5.0,
+                        step=0.5,
+                        help="正数表示看涨，负数表示看跌"
+                    ) / 100
+
+                with col2:
+                    confidence = st.slider(
+                        "置信度",
+                        min_value=0,
+                        max_value=100,
+                        value=70,
+                        help="0%表示完全不确定，100%表示完全确定"
+                    ) / 100
+
+                # 添加绝对观点按钮
+                if st.button("添加绝对观点", type="primary", key="add_absolute"):
+                    # 创建观点
+                    view = {
+                        'type': 'absolute',
+                        'asset': asset,
+                        'return': view_return,
+                        'confidence': confidence
+                    }
+
+                    # 添加到列表
+                    st.session_state.bl_views.append(view)
+                    st.success(f"✅ 已添加观点：{asset} 预期收益 {view_return:.2%}，置信度 {confidence:.0%}")
+
+            else:
+                # 相对观点输入
+                assets_pair = st.multiselect(
+                    "选择两个资产",
+                    list(st.session_state.assets_data.keys()),
+                    max_selections=2,
+                    help="选择两个资产进行比较"
+                )
+
+                if len(assets_pair) == 2:
+                    spread = st.number_input(
+                        "相对差异（%）",
+                        min_value=-20.0,
+                        max_value=20.0,
+                        value=3.0,
+                        step=0.5,
+                        help=f"{assets_pair[0]}比{assets_pair[1]}高多少%"
+                    ) / 100
+
+                    confidence = st.slider(
+                        "置信度",
+                        min_value=0,
+                        max_value=100,
+                        value=60,
+                        help="0%表示完全不确定，100%表示完全确定"
+                    ) / 100
+
+                    # 添加相对观点按钮
+                    if st.button("添加相对观点", type="primary", key="add_relative"):
+                        # 创建观点
+                        view = {
+                            'type': 'relative',
+                            'assets': assets_pair,
+                            'returns': [spread, -spread],
+                            'confidence': confidence
+                        }
+
+                        # 添加到列表
+                        st.session_state.bl_views.append(view)
+                        st.success(f"✅ 已添加观点：{assets_pair[0]}比{assets_pair[1]}高 {spread:.2%}，置信度 {confidence:.0%}")
+
+        with col_right:
+            st.subheader("📋 当前观点列表")
+
+            # 显示观点列表
+            if not st.session_state.bl_views:
+                st.info("暂无观点，请在左侧添加")
+            else:
+                # 创建观点列表表格
+                view_data = []
+                for i, view in enumerate(st.session_state.bl_views):
+                    if view['type'] == 'absolute':
+                        view_data.append({
+                            '序号': i + 1,
+                            '类型': '绝对观点',
+                            '资产': view['asset'],
+                            '观点': f"{view['return']:+.2%}",
+                            '置信度': f"{view['confidence']:.0%}"
+                        })
+                    else:
+                        view_data.append({
+                            '序号': i + 1,
+                            '类型': '相对观点',
+                            '资产': f"{view['assets'][0]} vs {view['assets'][1]}",
+                            '观点': f"{view['returns'][0]:+.2%}",
+                            '置信度': f"{view['confidence']:.0%}"
+                        })
+
+                st.dataframe(pd.DataFrame(view_data), use_container_width=True)
+
+                # 清空所有观点按钮
+                if st.button("清空所有观点", key="clear_views"):
+                    st.session_state.bl_views = []
+                    st.success("✅ 已清空所有观点")
+                    st.rerun()
+
+        st.markdown("---")
+
+        # ========== BL模型参数设置 ==========
+        st.subheader("⚙️ BL模型参数")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            tau = st.number_input(
+                "不确定性参数 τ",
+                min_value=0.001,
+                max_value=0.1,
+                value=0.05,
+                step=0.005,
+                format="%.3f",
+                help="控制市场均衡vs观点的权重，通常0.01-0.05"
+            )
+
+        with col2:
+            risk_free_rate = st.number_input(
+                "无风险利率（年化）",
+                min_value=0.0,
+                max_value=0.1,
+                value=0.03,
+                step=0.005,
+                format="%.3f"
+            )
+
+        with col3:
+            allow_short = st.checkbox("允许做空", value=False)
+
+        # ========== 回测参数设置 ==========
+        st.markdown("---")
+        st.subheader("📈 回测参数设置 🆕")
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            enable_backtest = st.checkbox(
+                "启用回测",
+                value=True,
+                help="是否对BL策略进行历史回测"
+            )
+
+        with col2:
+            rebalance_freq = st.selectbox(
+                "再平衡频率",
+                ["月度", "季度", "年度", "不调仓"],
+                index=0,
+                help="调仓频率：月度=每月调整一次"
+            )
+
+        with col3:
+            use_rolling = st.checkbox(
+                "滚动窗口",
+                value=False,
+                help="使用滚动窗口计算权重（更稳健）"
+            )
+
+        with col4:
+            warmup_period = st.number_input(
+                "预热期（天）",
+                min_value=30,
+                max_value=500,
+                value=252,
+                step=10,
+                help="计算权重的历史数据天数"
+            )
+
+        # 选择资产
+        st.subheader("📊 选择参与配权的资产")
+        selected_assets = st.multiselect(
+            "勾选资产",
+            list(st.session_state.assets_data.keys()),
+            default=list(st.session_state.assets_data.keys())
+        )
+
+        # ========== 计算按钮 ==========
+        if st.button("计算BL权重", type="primary", key="compute_bl"):
+            if not selected_assets:
+                st.error("请至少选择一个资产")
+            elif not st.session_state.bl_views:
+                st.warning("⚠️ 请先添加至少一个观点（或使用市场均衡收益）")
+            else:
+                with st.spinner("计算中..."):
+                    try:
+                        # 准备数据
+                        data_loader = DataLoader()
+                        returns_df = data_loader.prepare_returns(
+                            {k: st.session_state.assets_data[k] for k in selected_assets}
+                        )
+
+                        # 准备市值数据（使用等权作为默认值）
+                        # TODO: 后续可以从Tushare获取真实市值
+                        market_caps = {asset: 1e8 for asset in selected_assets}  # 暂时等权
+
+                        # 导入BL引擎
+                        from utils.bl_portfolio import BlackLittermanEngine
+
+                        # 创建BL引擎
+                        bl = BlackLittermanEngine(
+                            returns_df=returns_df,
+                            market_caps=market_caps,
+                            tau=tau,
+                            risk_free_rate=risk_free_rate
+                        )
+
+                        # 添加观点
+                        for view in st.session_state.bl_views:
+                            if view['type'] == 'absolute':
+                                bl.add_absolute_view(
+                                    view['asset'],
+                                    view['return'],
+                                    confidence=view['confidence']
+                                )
+                            else:
+                                bl.add_relative_view(
+                                    view['assets'],
+                                    view['returns'],
+                                    confidence=view['confidence']
+                                )
+
+                        # 计算权重
+                        weights = bl.compute_weights(allow_short=allow_short)
+
+                        # 保存结果
+                        st.session_state.bl_weights = weights
+
+                        # 显示成功消息
+                        st.success("✅ 计算完成！")
+
+                        # ========== 显示结果 ==========
+                        st.markdown("---")
+                        st.subheader("📈 配权结果")
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.write("**权重分配**")
+                            weights_df = pd.DataFrame({
+                                '资产': weights.index,
+                                'BL权重': weights.values
+                            })
+                            st.dataframe(weights_df, use_container_width=True)
+
+                        with col2:
+                            st.write("**权重饼图**")
+                            import plotly.express as px
+                            fig = px.pie(
+                                weights_df,
+                                values='BL权重',
+                                names='资产',
+                                title='BL模型配权权重'
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                        # ========== 对比分析 ==========
+                        st.markdown("---")
+                        st.subheader("🔍 与其他方法对比")
+
+                        try:
+                            comparison = bl.compare_with_benchmarks(weights)
+
+                            # 显示对比表格
+                            st.write("**权重对比**")
+                            st.dataframe(comparison.round(4), use_container_width=True)
+
+                            # 显示对比图表
+                            st.write("**权重对比图表**")
+                            fig = go.Figure()
+
+                            for col in comparison.columns:
+                                fig.add_trace(go.Bar(
+                                    name=col,
+                                    x=comparison.index,
+                                    y=comparison[col],
+                                ))
+
+                            fig.update_layout(
+                                barmode='group',
+                                title="不同配权方法对比",
+                                xaxis_title="资产",
+                                yaxis_title="权重",
+                                hovermode='x unified'
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                        except Exception as e:
+                            st.warning(f"对比分析失败: {str(e)}")
+
+                        # ========== 组合指标 ==========
+                        st.markdown("---")
+                        st.subheader("📊 组合指标")
+
+                        metrics = bl.get_portfolio_metrics(weights)
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("年化收益", f"{metrics['annual_return']:.2%}")
+                        with col2:
+                            st.metric("年化波动", f"{metrics['annual_volatility']:.2%}")
+                        with col3:
+                            st.metric("夏普比率", f"{metrics['sharpe_ratio']:.2f}")
+
+                        # ========== 回测分析 🆕 ==========
+                        if enable_backtest:
+                            st.markdown("---")
+                            st.subheader("📈 回测分析")
+
+                            try:
+                                # 导入回测引擎
+                                from utils.backtest import BacktestEngine, TransactionCost
+
+                                # 准备回测数据
+                                # 选择第一个资产作为基准
+                                baseline_asset = selected_assets[0]
+
+                                # 创建回测引擎
+                                backtest_engine = BacktestEngine(
+                                    returns_df=returns_df,
+                                    baseline_asset=baseline_asset,
+                                    prices_df=None
+                                )
+
+                                # 准备交易成本（使用默认值）
+                                transaction_costs = {
+                                    asset: TransactionCost()
+                                    for asset in selected_assets
+                                }
+
+                                # 运行回测
+                                # 使用BL权重作为静态权重
+                                results = backtest_engine.run_backtest(
+                                    initial_value=100000,
+                                    rebalance_freq=rebalance_freq,
+                                    transaction_costs=transaction_costs,
+                                    use_rolling_weights=use_rolling,
+                                    weighting_method="Black-Litterman",
+                                    warmup_period=warmup_period,
+                                    static_weights=weights
+                                )
+
+                                # 显示回测绩效
+                                st.write("**回测绩效指标**")
+                                bt_metrics = results['metrics']
+
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric("年化收益率", f"{bt_metrics['annual_return']:.2%}")
+                                with col2:
+                                    st.metric("年化波动率", f"{bt_metrics['annual_volatility']:.2%}")
+                                with col3:
+                                    st.metric("夏普比率", f"{bt_metrics['sharpe_ratio']:.2f}")
+                                with col4:
+                                    st.metric("最大回撤", f"{bt_metrics['max_drawdown']:.2%}")
+
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric("Calmar比率", f"{bt_metrics['calmar_ratio']:.2f}")
+                                with col2:
+                                    st.metric("Sortino比率", f"{bt_metrics['sortino_ratio']:.2f}")
+                                with col3:
+                                    st.metric("总交易次数", f"{bt_metrics['total_trades']}")
+                                with col4:
+                                    st.metric("总交易成本", f"¥{bt_metrics['total_transaction_cost']:.2f}")
+
+                                # 收益率曲线对比
+                                st.write("**收益率曲线对比**")
+                                import plotly.graph_objects as go
+
+                                fig = go.Figure()
+                                fig.add_trace(go.Scatter(
+                                    x=results['returns_series'].index,
+                                    y=results['returns_series']['portfolio'],
+                                    mode='lines',
+                                    name='BL组合收益率',
+                                    line=dict(color='blue', width=2)
+                                ))
+                                fig.add_trace(go.Scatter(
+                                    x=results['returns_series'].index,
+                                    y=results['returns_series']['baseline'],
+                                    mode='lines',
+                                    name=f'{baseline_asset}收益率',
+                                    line=dict(color='red', width=2, dash='dash')
+                                ))
+
+                                # 标记调仓点
+                                if results['trade_log']:
+                                    rebalance_dates = [t['date'] for t in results['trade_log']]
+                                    fig.add_trace(go.Scatter(
+                                        x=rebalance_dates,
+                                        y=[0] * len(rebalance_dates),
+                                        mode='markers',
+                                        name='调仓点',
+                                        marker=dict(color='green', size=8, symbol='triangle-up')
+                                    ))
+
+                                fig.update_layout(
+                                    title="BL组合 vs 基准收益率对比",
+                                    xaxis_title="日期",
+                                    yaxis_title="累计收益率",
+                                    hovermode='x unified'
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # 回撤分析
+                                st.write("**回撤分析**")
+                                fig2 = go.Figure()
+                                fig2.add_trace(go.Scatter(
+                                    x=results['drawdown_series'].index,
+                                    y=results['drawdown_series'],
+                                    mode='lines',
+                                    name='BL组合回撤',
+                                    fill='tozeroy',
+                                    line=dict(color='red')
+                                ))
+                                fig2.update_layout(
+                                    title="BL组合回撤曲线",
+                                    xaxis_title="日期",
+                                    yaxis_title="回撤"
+                                )
+                                st.plotly_chart(fig2, use_container_width=True)
+
+                                # 仓位变化
+                                if 'position_series' in results:
+                                    st.write("**仓位变化**")
+                                    position_series = results['position_series']
+
+                                    fig3 = go.Figure()
+                                    for asset in position_series.columns:
+                                        fig3.add_trace(go.Scatter(
+                                            x=position_series.index,
+                                            y=position_series[asset],
+                                            mode='lines',
+                                            name=asset,
+                                            stackgroup='one'
+                                        ))
+
+                                    fig3.update_layout(
+                                        title="资产仓位时间序列",
+                                        xaxis_title="日期",
+                                        yaxis_title="市值（元）",
+                                        hovermode='x unified'
+                                    )
+                                    st.plotly_chart(fig3, use_container_width=True)
+
+                            except Exception as e:
+                                st.warning(f"⚠️ 回测失败: {str(e)}")
+                                import traceback
+                                st.code(f"错误详情:\n{traceback.format_exc()}")
+
+                    except Exception as e:
+                        st.error(f"❌ 计算失败: {str(e)}")
+                        import traceback
+                        st.error(f"错误详情:\n``{traceback.format_exc()}```")
 
 # 页脚
 st.markdown("---")

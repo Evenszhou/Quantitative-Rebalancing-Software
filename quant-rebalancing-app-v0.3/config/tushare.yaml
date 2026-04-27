@@ -1,0 +1,14 @@
+# Tushare配置文件
+# 注意：此文件包含敏感信息，不要提交到Git仓库
+
+tushare:
+  # Token配置（建议使用环境变量，这里仅作示例）
+  token: ""  # 留空，从环境变量TUSHARE_TOKEN读取
+
+  # 缓存配置
+  cache_dir: './data/cache'
+  cache_expire: 86400  # 缓存过期时间（秒），默认24小时
+
+  # API配置
+  api_delay: 0.1  # API调用间隔（秒），避免限流
+  max_retries: 3  # 失败重试次数
